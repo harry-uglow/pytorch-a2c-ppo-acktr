@@ -218,6 +218,7 @@ def main():
                 # Sometimes monitor doesn't properly flush the outputs
                 win = visdom_plot(viz, win, args.log_dir, args.env_name,
                                   args.algo, args.num_env_steps)
+                print("Plot updated.")
             except IOError:
                 pass
 
