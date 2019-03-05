@@ -1,4 +1,7 @@
 # Python imports
+import atexit
+import signal
+
 import numpy as np
 from gym import spaces, Env
 import vrep
@@ -30,16 +33,10 @@ def check_for_errors(code):
 
 
 # Define the port number where communication will be made to the V-Rep server
-port_num = 19990
+base_port_num = 19998
 # Define the host where this communication is taking place (the local machine, in this case)
 host = '127.0.0.1'
 
-# Launch a V-Rep server
-# Read more here: http://www.coppeliarobotics.com/helpFiles/en/commandLine.htm
-remote_api_string = '-gREMOTEAPISERVERSERVICE_' + str(port_num) + '_FALSE_TRUE'
-args = ['/homes/hu115/Desktop/V-REP_PRO_EDU_V3_6_0_Ubuntu18_04/vrep.sh',
-        '-h',
-        remote_api_string]
 dir_path = os.getcwd()
 scene_path = dir_path + '/reacher.ttt'
 
@@ -58,13 +55,22 @@ class Arm3DEnv(Env):
     # link_lengths = [0.2, 0.15, 0.1]
     timestep = 0
 
-    def __init__(self, seed, ep_len=128):
+    def __init__(self, env_id, seed, rank, ep_len=128):
+        self.env_id = env_id
+        # Launch a V-Rep server
+        # Read more here: http://www.coppeliarobotics.com/helpFiles/en/commandLine.htm
+        port_num = base_port_num + rank
+        remote_api_string = '-gREMOTEAPISERVERSERVICE_' + str(port_num) + '_FALSE_TRUE'
+        args = ['/homes/hu115/Desktop/V-REP_PRO_EDU_V3_6_0_Ubuntu18_04/vrep.sh',
+                '-h',
+                remote_api_string]
+        atexit.register(self.close_vrep)
         self.process = Popen(args, preexec_fn=os.setsid)
         time.sleep(6)
 
         self.target_norm = self.normalise_target()
         self.np_random = np.random.RandomState()
-        self.np_random.seed(seed)
+        self.np_random.seed(seed + rank)
         self.ep_len = ep_len
 
         self.cid = vrep.simxStart(host, port_num, True, True, 5000, 5)
@@ -76,8 +82,8 @@ class Arm3DEnv(Env):
         check_for_errors(return_code)
 
         # Get the initial configuration of the robot (needed to later reset the robot's pose)
-        self.init_config_tree, _, _, _ = self.call_lua_function('get_configuration_tree', opmode=vrep.simx_opmode_blocking)
-        _, self.init_joint_angles, _, _ = self.call_lua_function('get_joint_angles', opmode=vrep.simx_opmode_blocking)
+        self.init_config_tree, _, _, _ = self.call_lua_function('get_configuration_tree')
+        _, self.init_joint_angles, _, _ = self.call_lua_function('get_joint_angles')
 
         for i in range(7):
             return_code, handle = vrep.simxGetObjectHandle(self.cid, 'Sawyer_joint' + str(i + 1),
@@ -93,7 +99,7 @@ class Arm3DEnv(Env):
         return_code = vrep.simxStartSimulation(self.cid, vrep.simx_opmode_blocking)
         check_for_errors(return_code)
 
-        print("Environment is loaded: ", self.joint_handles, self.end_handle)
+        print("Environment is loaded: ", self.joint_handles, end_handle)
         self.start_time = time.time()
 
     def normalise_target(self, lower=-2.5, upper=2.5):
@@ -142,7 +148,7 @@ class Arm3DEnv(Env):
                                       reward_ctrl=reward_ctrl)
 
     def _get_obs(self):
-        _, curr_joint_angles, _, _ = self.call_lua_function('get_joint_angles', opmode=vrep.simx_opmode_blocking)
+        _, curr_joint_angles, _, _ = self.call_lua_function('get_joint_angles')
         self.joint_angles = np.array(curr_joint_angles)
         norm_joints = self.normalise_joints()
         return np.append(norm_joints, self.target_norm)
@@ -158,8 +164,7 @@ class Arm3DEnv(Env):
         vrep.simxGetPingTime(self.cid)
 
     def get_end_pose(self):
-        return vrep.simxGetJointPosition(self.cid,
-            self.end_handle, vrep.simx_opmode_buffer)[1]
+        return vrep.simxGetJointPosition(self.cid, self.end_handle, vrep.simx_opmode_blocking)[1]
 
     def render(self, mode='human'):
         pass
@@ -173,6 +178,14 @@ class Arm3DEnv(Env):
             floats, strings, bytes, opmode)
         check_for_errors(return_code)
         return out_ints, out_floats, out_strings, out_buffer
+
+    def close_vrep(self):
+        # Shutdown
+        print("Closing VREP")
+        vrep.simxStopSimulation(self.cid, vrep.simx_opmode_blocking)
+        vrep.simxFinish(self.cid)
+        pgrp = os.getpgid(self.process.pid)
+        os.killpg(pgrp, signal.SIGKILL)
 
     # def get_actual_velocities(self):
     #     # Get the actual velocities of the robot's joints
