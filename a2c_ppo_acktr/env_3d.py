@@ -95,15 +95,17 @@ class Arm3DEnv(Env):
             self.joint_handles[i] = handle
 
         return_code, self.end_handle = vrep.simxGetObjectHandle(self.cid,
-                     "BaxterGripper_centerJoint", vrep.simx_opmode_blocking)
+                "BaxterGripper_centerJoint", vrep.simx_opmode_blocking)
         check_for_errors(return_code)
+        _, self.target_handle = vrep.simxGetObjectHandle(self.cid,
+                "Cuboid", vrep.simx_opmode_blocking)
 
         # Start the simulation (the "Play" button in V-Rep should now be in a "Pressed" state)
         return_code = vrep.simxStartSimulation(self.cid, vrep.simx_opmode_blocking)
         check_for_errors(return_code)
 
-    def normalise_target(self, lower=-2.5, upper=2.5):
-        return (self.target_pose - lower) / (upper - lower)
+    def normalise_target(self, lower=0.125, upper=0.7):
+        return (np.abs(self.target_pose) - lower) / (upper - lower)
 
     def normalise_joints(self):  # TODO
         js = self.joint_angles / np.pi
@@ -116,7 +118,13 @@ class Arm3DEnv(Env):
         return np.array([dt * 2 * max_dt for dt in dts])
 
     def reset(self):
+        self.target_pose[0] = self.np_random.uniform(0.125, 0.7)
+        self.target_pose[1] = self.np_random.uniform(-0.125, -0.7)
+        self.target_norm = self.normalise_target()
         self.call_lua_function('set_joint_angles', ints=self.init_config_tree, floats=self.init_joint_angles)
+        vrep.simxSetObjectPosition(self.cid, self.target_handle, -1,
+                                   self.target_pose,
+                                   vrep.simx_opmode_blocking)
 
         self.target_velocities = np.array([0., 0., 0., 0., 0., 0., 0.])
         self.joint_angles = self.init_joint_angles
