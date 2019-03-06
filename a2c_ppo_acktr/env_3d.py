@@ -1,5 +1,6 @@
 # Python imports
 import atexit
+import platform
 import signal
 
 import numpy as np
@@ -40,6 +41,11 @@ host = '127.0.0.1'
 dir_path = os.getcwd()
 scene_path = dir_path + '/reacher.ttt'
 
+vrep_path = '/Users/Harry/Applications/V-REP_PRO_EDU_V3_6_0_Mac/vrep.app' \
+            '/Contents/MacOS/vrep' \
+    if platform.system() == 'Darwin' else \
+    '/homes/hu115/Desktop/V-REP_PRO_EDU_V3_6_0_Ubuntu18_04/vrep.sh'
+
 
 class Arm3DEnv(Env):
 
@@ -61,9 +67,7 @@ class Arm3DEnv(Env):
         # Read more here: http://www.coppeliarobotics.com/helpFiles/en/commandLine.htm
         port_num = base_port_num + rank
         remote_api_string = '-gREMOTEAPISERVERSERVICE_' + str(port_num) + '_FALSE_TRUE'
-        args = ['/homes/hu115/Desktop/V-REP_PRO_EDU_V3_6_0_Ubuntu18_04/vrep.sh',
-                '-h' if headless else '',
-                remote_api_string]
+        args = [vrep_path, '-h' if headless else '', remote_api_string]
         atexit.register(self.close_vrep)
         self.process = Popen(args, preexec_fn=os.setsid)
         time.sleep(6)
