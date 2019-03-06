@@ -29,7 +29,7 @@ def check_for_errors(code):
     elif code == vrep.simx_return_local_error_flag:
         raise RuntimeError('The function caused an error on the client side')
     elif code == vrep.simx_return_initialize_error_flag:
-        raise RuntimeError('A connection to vrep has not been made yet. Have you called connect()? (Port num = ' + str(port_num))
+        raise RuntimeError('A connection to vrep has not been made yet. Have you called connect()?')
 
 
 # Define the port number where communication will be made to the V-Rep server
@@ -55,14 +55,14 @@ class Arm3DEnv(Env):
     # link_lengths = [0.2, 0.15, 0.1]
     timestep = 0
 
-    def __init__(self, env_id, seed, rank, ep_len=128):
+    def __init__(self, env_id, seed, rank, ep_len=128, headless=True):
         self.env_id = env_id
         # Launch a V-Rep server
         # Read more here: http://www.coppeliarobotics.com/helpFiles/en/commandLine.htm
         port_num = base_port_num + rank
         remote_api_string = '-gREMOTEAPISERVERSERVICE_' + str(port_num) + '_FALSE_TRUE'
         args = ['/homes/hu115/Desktop/V-REP_PRO_EDU_V3_6_0_Ubuntu18_04/vrep.sh',
-                '-h',
+                '-h' if headless else '',
                 remote_api_string]
         atexit.register(self.close_vrep)
         self.process = Popen(args, preexec_fn=os.setsid)
@@ -74,7 +74,6 @@ class Arm3DEnv(Env):
         self.ep_len = ep_len
 
         self.cid = vrep.simxStart(host, port_num, True, True, 5000, 5)
-        print(self.cid)
         return_code = vrep.simxSynchronous(self.cid, enable=True)
         check_for_errors(return_code)
 
@@ -99,9 +98,6 @@ class Arm3DEnv(Env):
         return_code = vrep.simxStartSimulation(self.cid, vrep.simx_opmode_blocking)
         check_for_errors(return_code)
 
-        print("Environment is loaded: ", self.joint_handles, end_handle)
-        self.start_time = time.time()
-
     def normalise_target(self, lower=-2.5, upper=2.5):
         return (self.target_pose - lower) / (upper - lower)
 
@@ -116,10 +112,6 @@ class Arm3DEnv(Env):
         return np.array([dt * 2 * max_dt for dt in dts])
 
     def reset(self):
-        curr_time = time.time()
-        print("Episode duration: ", curr_time - self.start_time)
-        self.start_time = curr_time
-
         self.call_lua_function('set_joint_angles', ints=self.init_config_tree, floats=self.init_joint_angles)
 
         self.target_velocities = np.array([0., 0., 0., 0., 0., 0., 0.])
@@ -129,7 +121,6 @@ class Arm3DEnv(Env):
         return self._get_obs()
 
     def step(self, a):
-        # start_time = time.time()
         self.target_velocities = self.unnormalise(a)
         vec = self.get_end_pose() - self.target_pose
         reward_dist = - np.linalg.norm(vec)
@@ -143,7 +134,6 @@ class Arm3DEnv(Env):
         reward_ctrl = - np.square(self.target_velocities).mean()
         reward = reward_dist + reward_ctrl
 
-        # print("Step duration: ", time.time() - start_time)
         return ob, reward, done, dict(reward_dist=reward_dist,
                                       reward_ctrl=reward_ctrl)
 
@@ -164,7 +154,8 @@ class Arm3DEnv(Env):
         vrep.simxGetPingTime(self.cid)
 
     def get_end_pose(self):
-        return vrep.simxGetJointPosition(self.cid, self.end_handle, vrep.simx_opmode_blocking)[1]
+        pose = vrep.simxGetObjectPosition(self.cid, self.end_handle, -1, vrep.simx_opmode_blocking)[1]
+        return np.array(pose)
 
     def render(self, mode='human'):
         pass

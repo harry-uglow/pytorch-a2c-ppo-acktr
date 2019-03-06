@@ -94,6 +94,7 @@ def main():
     episode_rewards = deque(maxlen=10)
 
     start = time.time()
+    start_update = start
     for j in range(num_updates):
 
         if args.use_linear_lr_decay:
@@ -170,6 +171,8 @@ def main():
                        np.min(episode_rewards),
                        np.max(episode_rewards), dist_entropy,
                        value_loss, action_loss))
+            print("Update length: ", end - start_update)
+            start_update = end
 
         # if (args.eval_interval is not None
         #         and len(episode_rewards) > 1
@@ -218,7 +221,6 @@ def main():
                 # Sometimes monitor doesn't properly flush the outputs
                 win = visdom_plot(viz, win, args.log_dir, args.env_name,
                                   args.algo, args.num_env_steps)
-                print("Plot updated.")
             except IOError:
                 pass
 
