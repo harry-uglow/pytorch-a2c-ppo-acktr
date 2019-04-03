@@ -135,7 +135,7 @@ class Arm3DEnv(Env):
     def step(self, a):
         self.target_velocities = self.unnormalise(a)
         vec = self.get_end_pose() - self.target_pose
-        reward_dist = - np.linalg.norm(vec)
+        reward_dist = - np.linalg.norm(vec) / 100.
 
         self.timestep += 1
         self.update_sim()
@@ -143,7 +143,7 @@ class Arm3DEnv(Env):
         ob = self._get_obs()
         done = (self.timestep == self.ep_len)
 
-        reward_ctrl = - np.square(self.target_velocities).mean()
+        reward_ctrl = - np.square(self.target_velocities).mean() / 100.
         reward = reward_dist + reward_ctrl
 
         return ob, reward, done, dict(reward_dist=reward_dist,
