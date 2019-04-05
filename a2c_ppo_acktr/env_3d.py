@@ -1,56 +1,18 @@
-# Python imports
-import atexit
-import platform
-import signal
+import os
 
 import numpy as np
 from gym import spaces, Env
 import vrep
-import time
-import os
-from subprocess import Popen
 
 from a2c_ppo_acktr.ResidualEnv import ResidualEnv
+from a2c_ppo_acktr.vrep_utils import check_for_errors, VrepEnv
 
 np.set_printoptions(precision=2, linewidth=200)
-
-
-# Function to check for errors when calling a remote API function
-def check_for_errors(code):
-    if code == vrep.simx_return_ok:
-        return
-    elif code == vrep.simx_return_novalue_flag:
-        # Often, not really an error, so just ignore
-        pass
-    elif code == vrep.simx_return_timeout_flag:
-        raise RuntimeError('The function timed out (probably the network is down or too slow)')
-    elif code == vrep.simx_return_illegal_opmode_flag:
-        raise RuntimeError('The specified operation mode is not supported for the given function')
-    elif code == vrep.simx_return_remote_error_flag:
-        raise RuntimeError('The function caused an error on the server side (e.g. an invalid handle was specified)')
-    elif code == vrep.simx_return_split_progress_flag:
-        raise RuntimeError('The communication thread is still processing previous split command of the same type')
-    elif code == vrep.simx_return_local_error_flag:
-        raise RuntimeError('The function caused an error on the client side')
-    elif code == vrep.simx_return_initialize_error_flag:
-        raise RuntimeError('A connection to vrep has not been made yet. Have you called connect()?')
-
-
-# Define the port number where communication will be made to the V-Rep server
-base_port_num = 19998
-# Define the host where this communication is taking place (the local machine, in this case)
-host = '127.0.0.1'
 
 dir_path = os.getcwd()
 scene_path = dir_path + '/reacher.ttt'
 
-vrep_path = '/Users/Harry/Applications/V-REP_PRO_EDU_V3_6_1_Mac/vrep.app' \
-            '/Contents/MacOS/vrep' \
-    if platform.system() == 'Darwin' else \
-    '/homes/hu115/Desktop/V-REP_PRO_EDU_V3_6_1_Ubuntu18_04/vrep.sh'
-
-
-class Arm3DEnv(ResidualEnv):
+class Arm3DEnv(VrepEnv):
 
     # def generate_training_path(joint_angles, target):
     #
@@ -82,16 +44,20 @@ class Arm3DEnv(ResidualEnv):
     #
     #     return np.array(train_path)
 
-    # def train_initial_policy(self):
-    #     test_targets = self.np_random.uniform(0.15, 0.25, (num_test_paths, 2))
-    #     norm_targets = np.array([normalise_target(target) for target in
-    #                              test_targets])
-    #     np.random.seed()
-    #
-    #     joint_angles = [0.1, 1.0, 0.5]
-    #     train_data = generate_training_path(np.copy(joint_angles), target_pose)
-    #     normed = normalise(train_data)
-    #     net = train_nn(Net(), normed)
+    def get_demo_path(self):
+        num_path_points = 17
+        num_joints = len(self.joint_handles)
+        _, path, _, _ = self.call_lua_function('solve_ik')
+        path = np.reshape(path, (num_path_points, num_joints))
+        distances = np.array([path[i + 1] - path[i]
+                              for i in range(0, len(path) - 1)])
+        velocities = distances * 20 # Distances should be covered in 0.05s
+        return path[:-1], velocities
+
+    def train_initial_policy(self):
+        path_poses, train_y = self.get_demo_path()
+        train_x = self.normalise_joints(path_poses)
+        # net = train_nn(Net(), normed) TODO
 
     observation_space = spaces.Box(np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                                    np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
@@ -105,23 +71,14 @@ class Arm3DEnv(ResidualEnv):
     # link_lengths = [0.2, 0.15, 0.1]
     timestep = 0
 
-    def __init__(self, env_id, seed, rank, ep_len=64, headless=True):
-        self.env_id = env_id
-        # Launch a V-Rep server
-        # Read more here: http://www.coppeliarobotics.com/helpFiles/en/commandLine.htm
-        port_num = base_port_num + rank
-        remote_api_string = '-gREMOTEAPISERVERSERVICE_' + str(port_num) + '_FALSE_TRUE'
-        args = [vrep_path, '-h' if headless else '', remote_api_string]
-        atexit.register(self.close_vrep)
-        self.process = Popen(args, preexec_fn=os.setsid)
-        time.sleep(6)
+    def __init__(self, seed, rank, ep_len=64, headless=True):
+        super().__init__(rank, headless)
 
         self.target_norm = self.normalise_target()
         self.np_random = np.random.RandomState()
         self.np_random.seed(seed + rank)
         self.ep_len = ep_len
 
-        self.cid = vrep.simxStart(host, port_num, True, True, 5000, 5)
         return_code = vrep.simxSynchronous(self.cid, enable=True)
         check_for_errors(return_code)
 
@@ -144,6 +101,8 @@ class Arm3DEnv(ResidualEnv):
         _, self.target_handle = vrep.simxGetObjectHandle(self.cid,
                 "Cuboid", vrep.simx_opmode_blocking)
 
+        self.train_initial_policy() # TODO
+
         # Start the simulation (the "Play" button in V-Rep should now be in a "Pressed" state)
         return_code = vrep.simxStartSimulation(self.cid, vrep.simx_opmode_blocking)
         check_for_errors(return_code)
@@ -151,13 +110,13 @@ class Arm3DEnv(ResidualEnv):
     def normalise_target(self, lower=0.125, upper=0.7):
         return (np.abs(self.target_pose) - lower) / (upper - lower)
 
-    def normalise_joints(self):  # TODO
-        js = self.joint_angles / np.pi
-        rem = lambda x: x - int(x)
+    def normalise_joints(self, joint_angles):
+        js = joint_angles / np.pi
+        rem = lambda x: x - x.astype(int)
         return np.array(
-            [rem((j + (abs(j) // 2 + 1.5) * 2) / 2.) for j in js])
+            [rem((j + (np.abs(j) // 2 + 1.5) * 2) / 2.) for j in js])
 
-    def unnormalise(self, dts):  # TODO
+    def unnormalise(self, dts):
         max_dt = np.pi / 6
         return np.array([dt * 2 * max_dt for dt in dts])
 
@@ -196,16 +155,14 @@ class Arm3DEnv(ResidualEnv):
     def _get_obs(self):
         _, curr_joint_angles, _, _ = self.call_lua_function('get_joint_angles')
         self.joint_angles = np.array(curr_joint_angles)
-        norm_joints = self.normalise_joints()
+        norm_joints = self.normalise_joints(curr_joint_angles)
         return np.append(norm_joints, self.target_norm)
 
     def update_sim(self):
-        # vrep.simxPauseCommunication(self.cid, True)
         for handle, velocity in zip(self.joint_handles, self.target_velocities):
             return_code = vrep.simxSetJointTargetVelocity(self.cid,
                 int(handle), velocity, vrep.simx_opmode_oneshot)
             check_for_errors(return_code)
-        # vrep.simxPauseCommunication(self.cid, False)
         vrep.simxSynchronousTrigger(self.cid)
         vrep.simxGetPingTime(self.cid)
 
@@ -215,24 +172,6 @@ class Arm3DEnv(ResidualEnv):
 
     def render(self, mode='human'):
         pass
-
-    # Function to call a Lua function in V-Rep
-    # Read more here: http://www.coppeliarobotics.com/helpFiles/en/remoteApiExtension.htm
-    def call_lua_function(self, lua_function, ints=[], floats=[], strings=[], bytes=bytearray(),
-                          opmode=vrep.simx_opmode_blocking):
-        return_code, out_ints, out_floats, out_strings, out_buffer = vrep.simxCallScriptFunction(
-            self.cid, 'remote_api', vrep.sim_scripttype_customizationscript, lua_function, ints,
-            floats, strings, bytes, opmode)
-        check_for_errors(return_code)
-        return out_ints, out_floats, out_strings, out_buffer
-
-    def close_vrep(self):
-        # Shutdown
-        print("Closing VREP")
-        vrep.simxStopSimulation(self.cid, vrep.simx_opmode_blocking)
-        vrep.simxFinish(self.cid)
-        pgrp = os.getpgid(self.process.pid)
-        os.killpg(pgrp, signal.SIGKILL)
 
     # def get_actual_velocities(self):
     #     # Get the actual velocities of the robot's joints
