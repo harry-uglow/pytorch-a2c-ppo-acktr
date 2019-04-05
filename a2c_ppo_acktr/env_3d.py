@@ -44,10 +44,10 @@ host = '127.0.0.1'
 dir_path = os.getcwd()
 scene_path = dir_path + '/reacher.ttt'
 
-vrep_path = '/Users/Harry/Applications/V-REP_PRO_EDU_V3_6_0_Mac/vrep.app' \
+vrep_path = '/Users/Harry/Applications/V-REP_PRO_EDU_V3_6_1_Mac/vrep.app' \
             '/Contents/MacOS/vrep' \
     if platform.system() == 'Darwin' else \
-    '/homes/hu115/Desktop/V-REP_PRO_EDU_V3_6_0_Ubuntu18_04/vrep.sh'
+    '/homes/hu115/Desktop/V-REP_PRO_EDU_V3_6_1_Ubuntu18_04/vrep.sh'
 
 
 class Arm3DEnv(ResidualEnv):
@@ -105,7 +105,7 @@ class Arm3DEnv(ResidualEnv):
     # link_lengths = [0.2, 0.15, 0.1]
     timestep = 0
 
-    def __init__(self, env_id, seed, rank, ep_len=128, headless=True):
+    def __init__(self, env_id, seed, rank, ep_len=64, headless=True):
         self.env_id = env_id
         # Launch a V-Rep server
         # Read more here: http://www.coppeliarobotics.com/helpFiles/en/commandLine.htm
@@ -241,6 +241,6 @@ class Arm3DEnv(ResidualEnv):
     #     return np.array(actual_velocities)
 
     ##### RESIDUAL RL #####
-    ip_action = initial_policy.act(obs)
-    complete_action =
+    #ip_action = initial_policy.act(obs)
+    #complete_action =
     #######################
