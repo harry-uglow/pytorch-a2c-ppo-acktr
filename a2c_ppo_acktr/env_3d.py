@@ -52,46 +52,46 @@ vrep_path = '/Users/Harry/Applications/V-REP_PRO_EDU_V3_6_1_Mac/vrep.app' \
 
 class Arm3DEnv(ResidualEnv):
 
-    def generate_training_path(joint_angles, target):
+    # def generate_training_path(joint_angles, target):
+    #
+    #     train_path = []
+    #     curr_joint_angles = np.copy(joint_angles)
+    #     curr_target = compute_end_pose(curr_joint_angles)
+    #
+    #     for i in range(0, ep_len):
+    #         if np.array_equal(target, curr_target):
+    #             train_path += [np.concatenate((curr_joint_angles, target,
+    #                                            [0, 0, 0]))]
+    #             continue
+    #         vec_to_target = target - curr_target
+    #         dist_to_target = np.linalg.norm(vec_to_target)
+    #
+    #         if dist_to_target < dps:
+    #             curr_target = target
+    #         else:
+    #             target_direction = vec_to_target / dist_to_target
+    #             curr_target = curr_target + (target_direction * dps)
+    #
+    #         d_theta = compute_d_theta(curr_joint_angles, curr_target)
+    #
+    #         train_path += [np.concatenate((curr_joint_angles, target, d_theta))]
+    #
+    #         curr_joint_angles[0] += d_theta[0]
+    #         curr_joint_angles[1] += d_theta[1]
+    #         curr_joint_angles[2] += d_theta[2]
+    #
+    #     return np.array(train_path)
 
-        train_path = []
-        curr_joint_angles = np.copy(joint_angles)
-        curr_target = compute_end_pose(curr_joint_angles)
-
-        for i in range(0, ep_len):
-            if np.array_equal(target, curr_target):
-                train_path += [np.concatenate((curr_joint_angles, target,
-                                               [0, 0, 0]))]
-                continue
-            vec_to_target = target - curr_target
-            dist_to_target = np.linalg.norm(vec_to_target)
-
-            if dist_to_target < dps:
-                curr_target = target
-            else:
-                target_direction = vec_to_target / dist_to_target
-                curr_target = curr_target + (target_direction * dps)
-
-            d_theta = compute_d_theta(curr_joint_angles, curr_target)
-
-            train_path += [np.concatenate((curr_joint_angles, target, d_theta))]
-
-            curr_joint_angles[0] += d_theta[0]
-            curr_joint_angles[1] += d_theta[1]
-            curr_joint_angles[2] += d_theta[2]
-
-        return np.array(train_path)
-
-    def train_initial_policy(self):
-        test_targets = self.np_random.uniform(0.15, 0.25, (num_test_paths, 2))
-        norm_targets = np.array([normalise_target(target) for target in
-                                 test_targets])
-        np.random.seed()
-
-        joint_angles = [0.1, 1.0, 0.5]
-        train_data = generate_training_path(np.copy(joint_angles), target_pose)
-        normed = normalise(train_data)
-        net = train_nn(Net(), normed)
+    # def train_initial_policy(self):
+    #     test_targets = self.np_random.uniform(0.15, 0.25, (num_test_paths, 2))
+    #     norm_targets = np.array([normalise_target(target) for target in
+    #                              test_targets])
+    #     np.random.seed()
+    #
+    #     joint_angles = [0.1, 1.0, 0.5]
+    #     train_data = generate_training_path(np.copy(joint_angles), target_pose)
+    #     normed = normalise(train_data)
+    #     net = train_nn(Net(), normed)
 
     observation_space = spaces.Box(np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                                    np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
@@ -241,6 +241,6 @@ class Arm3DEnv(ResidualEnv):
     #     return np.array(actual_velocities)
 
     ##### RESIDUAL RL #####
-    #ip_action = initial_policy.act(obs)
-    #complete_action =
+    # ip_action = initial_policy.act(obs)
+    # complete_action =
     #######################
