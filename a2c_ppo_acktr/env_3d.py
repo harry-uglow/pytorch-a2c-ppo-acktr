@@ -155,7 +155,7 @@ class Arm3DEnv(VrepEnv):
     def _get_obs(self):
         _, curr_joint_angles, _, _ = self.call_lua_function('get_joint_angles')
         self.joint_angles = np.array(curr_joint_angles)
-        norm_joints = self.normalise_joints(curr_joint_angles)
+        norm_joints = self.normalise_joints(np.array(curr_joint_angles))
         return np.append(norm_joints, self.target_norm)
 
     def update_sim(self):
