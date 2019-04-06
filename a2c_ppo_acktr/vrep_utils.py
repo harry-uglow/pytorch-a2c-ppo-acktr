@@ -13,11 +13,11 @@ import vrep
 def check_for_errors(code):
     if code == vrep.simx_return_ok:
         return
+    elif code == vrep.simx_return_timeout_flag:
+        raise RuntimeError('The function timed out (probably the network is down or too slow)')
     elif code == vrep.simx_return_novalue_flag:
         # Often, not really an error, so just ignore
         pass
-    elif code == vrep.simx_return_timeout_flag:
-        raise RuntimeError('The function timed out (probably the network is down or too slow)')
     elif code == vrep.simx_return_illegal_opmode_flag:
         raise RuntimeError('The specified operation mode is not supported for the given function')
     elif code == vrep.simx_return_remote_error_flag:

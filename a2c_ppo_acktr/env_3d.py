@@ -3,8 +3,8 @@ import os
 import numpy as np
 from gym import spaces, Env
 import vrep
+from a2c_ppo_acktr.residual.initial_policy_model import InitialPolicy, train_nn
 
-from a2c_ppo_acktr.ResidualEnv import ResidualEnv
 from a2c_ppo_acktr.vrep_utils import check_for_errors, VrepEnv
 
 np.set_printoptions(precision=2, linewidth=200)
@@ -46,9 +46,8 @@ class Arm3DEnv(VrepEnv):
 
     def get_demo_path(self):
         num_path_points = 17
-        num_joints = len(self.joint_handles)
         _, path, _, _ = self.call_lua_function('solve_ik')
-        path = np.reshape(path, (num_path_points, num_joints))
+        path = np.reshape(path, (num_path_points, len(self.joint_handles)))
         distances = np.array([path[i + 1] - path[i]
                               for i in range(0, len(path) - 1)])
         velocities = distances * 20 # Distances should be covered in 0.05s
@@ -57,7 +56,9 @@ class Arm3DEnv(VrepEnv):
     def train_initial_policy(self):
         path_poses, train_y = self.get_demo_path()
         train_x = self.normalise_joints(path_poses)
-        # net = train_nn(Net(), normed) TODO
+        num_joints = len(self.joint_handles)
+        net = train_nn(InitialPolicy(num_joints, num_joints), train_x, train_y)
+        return net
 
     observation_space = spaces.Box(np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                                    np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
@@ -68,7 +69,6 @@ class Arm3DEnv(VrepEnv):
     joint_handles = np.array([None] * 7)
     target_velocities = np.array([0., 0., 0., 0., 0., 0., 0.])
     target_pose = np.array([0.3, -0.3, 0.025])
-    # link_lengths = [0.2, 0.15, 0.1]
     timestep = 0
 
     def __init__(self, seed, rank, ep_len=64, headless=True):
@@ -96,26 +96,29 @@ class Arm3DEnv(VrepEnv):
             self.joint_handles[i] = handle
 
         return_code, self.end_handle = vrep.simxGetObjectHandle(self.cid,
-                "BaxterGripper_centerJoint", vrep.simx_opmode_blocking)
+                "Sawyer_tip", vrep.simx_opmode_blocking)
         check_for_errors(return_code)
         _, self.target_handle = vrep.simxGetObjectHandle(self.cid,
-                "Cuboid", vrep.simx_opmode_blocking)
+                "Target", vrep.simx_opmode_blocking)
 
-        self.train_initial_policy() # TODO
+        # self.train_initial_policy() # TODO
 
         # Start the simulation (the "Play" button in V-Rep should now be in a "Pressed" state)
         return_code = vrep.simxStartSimulation(self.cid, vrep.simx_opmode_blocking)
         check_for_errors(return_code)
 
+    # Normalise target so that x and y are in range [0, 1].
     def normalise_target(self, lower=0.125, upper=0.7):
         return (np.abs(self.target_pose) - lower) / (upper - lower)
 
+    # Normalise joint angles so -pi -> 0, 0 -> 0.5 and pi -> 1. (mod pi)
     def normalise_joints(self, joint_angles):
         js = joint_angles / np.pi
         rem = lambda x: x - x.astype(int)
         return np.array(
             [rem((j + (np.abs(j) // 2 + 1.5) * 2) / 2.) for j in js])
 
+    # TODO: Remove
     def unnormalise(self, dts):
         max_dt = np.pi / 6
         return np.array([dt * 2 * max_dt for dt in dts])
@@ -172,12 +175,6 @@ class Arm3DEnv(VrepEnv):
 
     def render(self, mode='human'):
         pass
-
-    # def get_actual_velocities(self):
-    #     # Get the actual velocities of the robot's joints
-    #     _, actual_velocities, _, _ = self.call_lua_function('get_joint_velocities', ints=list(self.joint_handles),
-    #                                                    opmode=vrep.simx_opmode_blocking)
-    #     return np.array(actual_velocities)
 
     ##### RESIDUAL RL #####
     # ip_action = initial_policy.act(obs)
