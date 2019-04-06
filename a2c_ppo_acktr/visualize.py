@@ -3,7 +3,6 @@
 # Thanks to the author and OpenAI team!
 
 import glob
-import json
 import os
 
 import matplotlib
@@ -104,10 +103,11 @@ color_defaults = [
 ]
 
 
-def visdom_plot(viz, win, folder, game, name, num_steps, bin_size=100, smooth=1):
+def visdom_plot(folder, game, name, num_steps, bin_size=100,
+                smooth=1):
     tx, ty = load_data(folder, smooth, bin_size)
     if tx is None or ty is None:
-        return win
+        return
 
     fig = plt.figure()
     plt.plot(tx, ty, label="{}".format(name))
@@ -126,16 +126,10 @@ def visdom_plot(viz, win, folder, game, name, num_steps, bin_size=100, smooth=1)
     plt.show()
     plt.draw()
 
+    plt.savefig(name + '.png')
     image = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
     image = image.reshape(fig.canvas.get_width_height()[::-1] + (3, ))
+    plt.savefig(name + '1.png')
     plt.close(fig)
 
-    # Show it in visdom
-    image = np.transpose(image, (2, 0, 1))
-    return viz.image(image, win=win)
-
-
-if __name__ == "__main__":
-    from visdom import Visdom
-    viz = Visdom()
-    visdom_plot(viz, None, '/tmp/gym/', 'BreakOut', 'a2c', bin_size=100, smooth=1)
+    return

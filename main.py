@@ -57,11 +57,6 @@ def main():
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if args.cuda else "cpu")
 
-    if args.vis:
-        from visdom import Visdom
-        viz = Visdom(port=args.port)
-        win = None
-
     envs = make_vec_envs(args.env_name, args.seed, args.num_processes,
                         args.gamma, args.log_dir, args.add_timestep, device, False)
 
@@ -219,8 +214,8 @@ def main():
         if args.vis and j % args.vis_interval == 0:
             try:
                 # Sometimes monitor doesn't properly flush the outputs
-                win = visdom_plot(viz, win, args.log_dir, args.env_name,
-                                  args.algo, args.num_env_steps)
+                visdom_plot(args.log_dir, args.env_name,
+                            args.algo, args.num_env_steps)
             except IOError:
                 pass
 
