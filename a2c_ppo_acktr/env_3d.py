@@ -1,7 +1,7 @@
 import os
 
 import numpy as np
-from gym import spaces, Env
+from gym import spaces
 import vrep
 from a2c_ppo_acktr.residual.initial_policy_model import InitialPolicy, train_nn
 
@@ -96,10 +96,10 @@ class Arm3DEnv(VrepEnv):
             self.joint_handles[i] = handle
 
         return_code, self.end_handle = vrep.simxGetObjectHandle(self.cid,
-                "Sawyer_tip", vrep.simx_opmode_blocking)
+                "BaxterGripper_centerJoint", vrep.simx_opmode_blocking)
         check_for_errors(return_code)
         _, self.target_handle = vrep.simxGetObjectHandle(self.cid,
-                "Target", vrep.simx_opmode_blocking)
+                "Cube", vrep.simx_opmode_blocking)
 
         # self.train_initial_policy() # TODO
 
@@ -118,11 +118,6 @@ class Arm3DEnv(VrepEnv):
         return np.array(
             [rem((j + (np.abs(j) // 2 + 1.5) * 2) / 2.) for j in js])
 
-    # TODO: Remove
-    def unnormalise(self, dts):
-        max_dt = np.pi / 6
-        return np.array([dt * 2 * max_dt for dt in dts])
-
     def reset(self):
         self.target_pose[0] = self.np_random.uniform(0.125, 0.7)
         self.target_pose[1] = self.np_random.uniform(-0.125, -0.7)
@@ -139,7 +134,7 @@ class Arm3DEnv(VrepEnv):
         return self._get_obs()
 
     def step(self, a):
-        self.target_velocities = self.unnormalise(a)
+        self.target_velocities = a
         vec = self.get_end_pose() - self.target_pose
         reward_dist = - np.linalg.norm(vec) / 100.
 
