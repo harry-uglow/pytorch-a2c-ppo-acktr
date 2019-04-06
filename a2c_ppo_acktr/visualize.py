@@ -126,10 +126,7 @@ def visdom_plot(folder, game, name, num_steps, bin_size=100,
     plt.show()
     plt.draw()
 
-    plt.savefig(name + '.png')
-    image = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
-    image = image.reshape(fig.canvas.get_width_height()[::-1] + (3, ))
-    plt.savefig(name + '1.png')
+    plt.savefig(f'imgs/{game}.png')
     plt.close(fig)
 
     return

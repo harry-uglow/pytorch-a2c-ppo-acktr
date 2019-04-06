@@ -13,7 +13,7 @@ from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 
 from a2c_ppo_acktr.env_2d import Arm2DEnv
-from a2c_ppo_acktr.env_3d import Arm3DEnv
+from a2c_ppo_acktr.SawyerReacherEnv import SawyerReacherEnv
 
 try:
     import dm_control2gym
@@ -33,7 +33,7 @@ except ImportError:
 
 def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets, vis):
     def _thunk():
-        env = Arm3DEnv(seed, rank, headless=not vis)
+        env = SawyerReacherEnv(seed, rank, headless=not vis)
         if log_dir is not None:
             env = bench.Monitor(env, os.path.join(log_dir, str(rank)),
                                     allow_early_resets=allow_early_resets)
