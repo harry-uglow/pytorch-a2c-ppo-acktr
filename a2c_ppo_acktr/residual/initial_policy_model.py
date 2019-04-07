@@ -22,7 +22,7 @@ class InitialPolicy(nn.Module):
 
 
 # Data should be normalised
-def train_nn(net, train_x, train_y, lr=0.1, num_epochs=10):
+def train_nn(net, train_x, train_y, lr=0.1, num_epochs=25):
     optimizer = optim.SGD(net.parameters(), lr=lr)
     criterion = nn.MSELoss()
 
@@ -33,8 +33,7 @@ def train_nn(net, train_x, train_y, lr=0.1, num_epochs=10):
     epochs = 0
     while epochs < num_epochs:
         epochs += 1
-        dist, _ = net(train_x)
-        actual_y = dist.mean
+        actual_y = net(train_x)
         loss = criterion(actual_y, train_y)
 
         optimizer.zero_grad()

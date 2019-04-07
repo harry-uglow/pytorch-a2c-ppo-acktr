@@ -11,6 +11,7 @@ np.set_printoptions(precision=2, linewidth=200)  # DEBUG
 dir_path = os.getcwd()
 scene_path = dir_path + '/reacher.ttt'
 
+
 class SawyerReacherEnv(VrepEnv):
 
     observation_space = spaces.Box(np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
