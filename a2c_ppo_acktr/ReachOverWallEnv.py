@@ -27,13 +27,12 @@ class ReachOverWallEnv(VrepEnv):
 
     def train_initial_policy(self):
         path_poses, train_y = self.get_demo_path()
-        train_x = self.normalise_joints(path_poses)
+        train_x = self.normalise_angles(path_poses)
         num_joints = len(self.joint_handles)
         net = train_nn(InitialPolicy(num_joints, num_joints), train_x, train_y)
         return net
 
-    observation_space = spaces.Box(np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-                                   np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+    observation_space = spaces.Box(np.array([0] * 12), np.array([1] * 12),
                                    dtype=np.float32)
     action_space = spaces.Box(np.array([-1, -1, -1, -1, -1, -1, -1]),
                               np.array([1, 1, 1, 1, 1, 1, 1]), dtype=np.float32)
@@ -46,7 +45,7 @@ class ReachOverWallEnv(VrepEnv):
     def __init__(self, seed, rank, ep_len=64, headless=True):
         super().__init__(rank, headless)
 
-        self.target_norm = self.normalise_target()
+        self.target_norm = self.normalise_coords(self.target_pose)
         self.np_random = np.random.RandomState()
         self.np_random.seed(seed + rank)
         self.ep_len = ep_len
@@ -72,6 +71,15 @@ class ReachOverWallEnv(VrepEnv):
         check_for_errors(return_code)
         _, self.target_handle = vrep.simxGetObjectHandle(self.cid,
                 "Waypoint", vrep.simx_opmode_blocking)
+        _, self.wall_handle = vrep.simxGetObjectHandle(self.cid,
+                "Wall", vrep.simx_opmode_blocking)
+        self.init_wall_pos = vrep.simxGetObjectPosition(self.cid, self.wall_handle,
+                -1, vrep.simx_opmode_blocking)[1]
+        self.wall_distance = self.normalise_coords(self.init_wall_pos[0],
+                                                   lower=0, upper=1)
+        self.init_wall_rot = vrep.simxGetObjectOrientation(self.cid,
+                self.wall_handle, -1, vrep.simx_opmode_blocking)[1]
+        self.wall_orientation = self.init_wall_rot
 
         self.initial_policy = self.train_initial_policy()
 
@@ -80,13 +88,13 @@ class ReachOverWallEnv(VrepEnv):
         check_for_errors(return_code)
 
     # Normalise target so that x and y are in range [0, 1].
-    def normalise_target(self, lower=np.array([0.2, -0.4, 0]),
-                         upper=np.array([0.9, 0.4, 1])):
-        return (np.abs(self.target_pose) - lower) / (upper - lower)
+    def normalise_coords(self, coords, lower=np.array([0.2, -0.4, 0.2]),
+                         upper=np.array([0.9, 0.4, 1])): # DEBUG: u/l bounds currently set for waypoint
+        return (coords - lower) / (upper - lower)
 
     # Normalise joint angles so -pi -> 0, 0 -> 0.5 and pi -> 1. (mod pi)
-    def normalise_joints(self, joint_angles):
-        js = joint_angles / np.pi
+    def normalise_angles(self, angles):
+        js = angles / np.pi
         rem = lambda x: x - x.astype(int)
         return np.array(
             [rem((j + (np.abs(j) // 2 + 1.5) * 2) / 2.) for j in js])
@@ -99,6 +107,10 @@ class ReachOverWallEnv(VrepEnv):
         # vrep.simxSetObjectPosition(self.cid, self.target_handle, -1,
         #                            self.target_pose,
         #                            vrep.simx_opmode_blocking)
+        vrep.simxSetObjectPosition(self.cid, self.wall_handle, -1,
+                                   self.init_wall_pos, vrep.simx_opmode_blocking)
+        vrep.simxSetObjectOrientation(self.cid, self.wall_handle, -1,
+                                      self.init_wall_rot, vrep.simx_opmode_blocking)
 
         self.target_velocities = np.array([0., 0., 0., 0., 0., 0., 0.])
         self.joint_angles = self.init_joint_angles
@@ -107,30 +119,36 @@ class ReachOverWallEnv(VrepEnv):
         return self._get_obs()
 
     def step(self, a):
-        initial_policy_input = torch.from_numpy(self.normalise_joints(self.joint_angles))
+        initial_policy_input = torch.from_numpy(self.normalise_angles(self.joint_angles))
         initial_policy_action = self.initial_policy(
             initial_policy_input).detach().numpy()
         self.target_velocities = initial_policy_action + a  # Residual RL
         vec = self.get_end_pose() - self.target_pose
-        reward_dist = - np.linalg.norm(vec) / 100.
+        reward_dist = - np.linalg.norm(vec)
 
         self.timestep += 1
         self.update_sim()
 
+        self.wall_orientation = vrep.simxGetObjectOrientation(self.cid, self.wall_handle, -1,
+                                                              vrep.simx_opmode_blocking)[1]
         ob = self._get_obs()
         done = (self.timestep == self.ep_len)
 
-        reward_ctrl = - np.square(self.target_velocities).mean() / 100.
-        reward = reward_dist + reward_ctrl
+        reward_ctrl = - np.square(self.target_velocities).mean()
+        reward_obstacle = - np.abs(self.wall_orientation).sum()
+        reward = 0.02 * reward_dist + 0.01 * reward_ctrl + 0.1 * reward_obstacle
 
         return ob, reward, done, dict(reward_dist=reward_dist,
-                                      reward_ctrl=reward_ctrl)
+                                      reward_ctrl=reward_ctrl,
+                                      reward_obstacle=reward_obstacle)
 
     def _get_obs(self):
         _, curr_joint_angles, _, _ = self.call_lua_function('get_joint_angles')
         self.joint_angles = np.array(curr_joint_angles)
-        norm_joints = self.normalise_joints(self.joint_angles)
-        return np.append(norm_joints, self.target_norm)
+        norm_joints = self.normalise_angles(self.joint_angles)
+
+        return np.concatenate((norm_joints, self.target_norm,
+                               [self.wall_distance, 0.3])) # TODO: Get height in init
 
     def update_sim(self):
         for handle, velocity in zip(self.joint_handles, self.target_velocities):
@@ -141,7 +159,8 @@ class ReachOverWallEnv(VrepEnv):
         vrep.simxGetPingTime(self.cid)
 
     def get_end_pose(self):
-        pose = vrep.simxGetObjectPosition(self.cid, self.end_handle, -1, vrep.simx_opmode_blocking)[1]
+        pose = vrep.simxGetObjectPosition(self.cid, self.end_handle, -1,
+                                          vrep.simx_opmode_blocking)[1]
         return np.array(pose)
 
     def render(self, mode='human'):
