@@ -16,8 +16,8 @@ scene_path = dir_path + '/reach_over_wall.ttt'
 
 class ReachOverWallEnv(VrepEnv):
 
-    def solve_ik(self, group, distance):
-        _, path, _, _ = self.call_lua_function('solve_ik', strings=[group, distance])
+    def solve_ik(self):
+        _, path, _, _ = self.call_lua_function('solve_ik')
         num_path_points = len(path) // len(self.joint_handles)
         path = np.reshape(path, (num_path_points, len(self.joint_handles)))
         distances = np.array([path[i + 1] - path[i]
@@ -26,11 +26,11 @@ class ReachOverWallEnv(VrepEnv):
         return path, velocities
 
     def get_demo_path(self):
-        path, velocities_WP = self.solve_ik('IK_GroupW', 'tip_waypoint')
+        path, velocities_WP = self.solve_ik()
         path_to_WP = path[:-1]
 
         self.call_lua_function('set_joint_angles', ints=self.init_config_tree, floats=path[-1])
-        path_to_trg, velocities_trg = self.solve_ik('IK_GroupT', 'tip_target')
+        path_to_trg, velocities_trg = self.solve_ik()
 
         return self.normalise_angles(np.append(path_to_WP, path_to_trg[:-1], axis=0)), \
             np.append(velocities_WP, velocities_trg, axis=0)
@@ -47,10 +47,10 @@ class ReachOverWallEnv(VrepEnv):
             done = False
             while not done:
                 _, _, done, _ = self.step(null_action)
-                # new_x, new_y = self.get_demo_path()
-                new_x, new_y = self.solve_ik('IK_GroupT', 'tip_target')
-                x = np.append(x, self.normalise_angles(new_x[:-1]), axis=0)
-                y = np.append(y, new_y, axis=0)
+                new_x, new_y = self.solve_ik()
+                if len(new_x) != 0:
+                    x = np.append(x, self.normalise_angles(new_x[:-1]), axis=0)
+                    y = np.append(y, new_y, axis=0)
 
             p = self.np_random.permutation(len(x))
             self.initial_policy = train_nn(self.initial_policy, x[p], y[p])
