@@ -5,6 +5,7 @@ import numpy as np
 import torch
 
 from a2c_ppo_acktr.envs import VecPyTorch, make_vec_envs
+from a2c_ppo_acktr.residual.ROW_utils import setup_ROW_Env
 from a2c_ppo_acktr.utils import get_render_func, get_vec_normalize
 
 
@@ -29,16 +30,18 @@ args = parser.parse_args()
 
 args.det = not args.non_det
 
-env = make_vec_envs(args.env_name, args.seed + 1000, 1,
+# We need to use the same statistics for normalization as used in training
+actor_critic, ip, ob_rms = \
+            torch.load(os.path.join(args.load_dir, args.env_name + ".pt"))
+
+# ip = setup_ROW_Env(args.seed, 16)
+
+env = make_vec_envs(args.env_name, args.seed + 1000, 1, ip,
                             None, None, args.add_timestep, device='cpu',
                             allow_early_resets=False, vis=True)
 
 # Get a render function
 render_func = get_render_func(env)
-
-# We need to use the same statistics for normalization as used in training
-actor_critic, ob_rms = \
-            torch.load(os.path.join(args.load_dir, args.env_name + ".pt"))
 
 vec_norm = get_vec_normalize(env)
 if vec_norm is not None:

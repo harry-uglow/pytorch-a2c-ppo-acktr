@@ -36,7 +36,7 @@ class ReachOverWallInitialPolicy(object):
             end_x = end_pose[0]
             end_z = end_pose[2]
 
-            net = self.waypoint_net if end_x < 0.495 and end_z < 0.95 - end_x else self.target_net
+            net = self.waypoint_net if end_x < -0.005 and end_z < 0.445 - end_x else self.target_net
             return net(ip_input)
 
 
@@ -71,10 +71,8 @@ def train_initial_policy(env):
     env.initial_policy.train(True, xs['T'], ys['T'])
 
     null_action = np.array([0.] * len(x_WP[0]))
-    goal = 'T'
-    distance_name = 'tip_target'
-    # Use DAgger for 5 episodes
-    for i in range(10):
+    # Use DAgger for 8 episodes
+    for i in range(8):
         print("Training initial policy - DAgger iteration " + str(i))
         env.reset()
         done = False
@@ -82,9 +80,12 @@ def train_initial_policy(env):
             _, _, done, _ = env.step(null_action)
             end_x = env.end_pose[0]
             end_z = env.end_pose[2]
-            if end_x < 0.495 and end_z < 0.95 - end_x:
+            if end_x < -0.005 and end_z < 0.445 - end_x:
                 goal = 'W'
                 distance_name = 'tip_waypoint'
+            else:
+                goal = 'T'
+                distance_name = 'tip_target'
             new_x, new_y = solve_ik(env, 'IK_Group' + goal, distance_name)
             if len(new_x) != 0:
                 xs[goal] = np.append(xs[goal], normalise_angles(new_x[:-1]), axis=0)
@@ -102,5 +103,5 @@ def setup_ROW_Env(seed, rank):
     from a2c_ppo_acktr.ReachOverWallEnv import ReachOverWallEnv
     env = ReachOverWallEnv(seed, rank)
     ip = train_initial_policy(env)
-    env.close_vrep()
+    env.close()
     return ip

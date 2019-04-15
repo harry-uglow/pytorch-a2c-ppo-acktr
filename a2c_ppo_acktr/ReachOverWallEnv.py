@@ -24,8 +24,9 @@ class ReachOverWallEnv(VrepEnv):
     def __init__(self, seed, rank, initial_policy=None, ep_len=64, headless=True):
         super().__init__(rank, headless)
 
-        self.target_pose = np.array([0.7, 0., 0.025])  # TODO: Obtain
-        self.target_norm = normalise_coords(self.target_pose)
+        self.target_pos = np.array([0.3, -0.5, 0.025])  # TODO: Obtain
+        self.waypoint_pos = np.array([0, -0.5, 0.45])  # TODO: Obtain
+        self.target_norm = normalise_coords(self.target_pos)
         self.np_random = np.random.RandomState()
         self.np_random.seed(seed + rank)
         self.ep_len = ep_len
@@ -86,7 +87,7 @@ class ReachOverWallEnv(VrepEnv):
         ip_input = torch.from_numpy(normalise_angles(self.joint_angles))
         ip_action = self.initial_policy.act(self.end_pose, ip_input).detach().numpy()
         self.target_velocities = ip_action + a  # Residual RL
-        vec = self.end_pose - self.target_pose
+        vec = self.end_pose - self.target_pos
         reward_dist = - np.linalg.norm(vec)
 
         self.timestep += 1

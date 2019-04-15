@@ -150,9 +150,11 @@ def main():
             save_model = actor_critic
             if args.cuda:
                 save_model = copy.deepcopy(actor_critic).cpu()
+            save_ip = ip
+            if args.cuda:
+                save_ip = copy.deepcopy(ip).cpu()
 
-            save_model = [save_model,
-                          getattr(get_vec_normalize(envs), 'ob_rms', None)]
+            save_model = [save_model, save_ip, getattr(get_vec_normalize(envs), 'ob_rms', None)]
 
             torch.save(save_model, os.path.join(save_path, args.env_name + ".pt"))
 
@@ -172,47 +174,47 @@ def main():
             print("Update length: ", end - start_update)
             start_update = end
 
-        # if (args.eval_interval is not None
-        #         and len(episode_rewards) > 1
-        #         and j % args.eval_interval == 0):
-        #     eval_envs = make_vec_envs(
-        #         args.env_name, args.seed + args.num_processes, args.num_processes,
-        #         args.gamma, eval_log_dir, args.add_timestep, device, True)
-        #
-        #     vec_norm = get_vec_normalize(eval_envs)
-        #     if vec_norm is not None:
-        #         vec_norm.eval()
-        #         vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
-        #
-        #     eval_episode_rewards = []
-        #
-        #     obs = eval_envs.reset()
-        #     eval_recurrent_hidden_states = torch.zeros(args.num_processes,
-        #                     actor_critic.recurrent_hidden_state_size, device=device)
-        #     eval_masks = torch.zeros(args.num_processes, 1, device=device)
-        #
-        #     while len(eval_episode_rewards) < 10:
-        #         with torch.no_grad():
-        #             _, action, _, eval_recurrent_hidden_states = actor_critic.act(
-        #                 obs, eval_recurrent_hidden_states, eval_masks, deterministic=True)
-        #
-        #         # Obser reward and next obs
-        #         obs, reward, done, infos = eval_envs.step(action)
-        #
-        #         eval_masks = torch.tensor([[0.0] if done_ else [1.0]
-        #                                    for done_ in done],
-        #                                    dtype=torch.float32,
-        #                                    device=device)
-        #
-        #         for info in infos:
-        #             if 'episode' in info.keys():
-        #                 eval_episode_rewards.append(info['episode']['r'])
-        #
-        #     eval_envs.close()
-        #
-        #     print(" Evaluation using {} episodes: mean reward {:.5f}\n".
-        #         format(len(eval_episode_rewards),
-        #                np.mean(eval_episode_rewards)))
+        if (args.eval_interval is not None
+                and len(episode_rewards) > 1
+                and j % args.eval_interval == 0):
+            eval_envs = make_vec_envs(
+                args.env_name, args.seed + args.num_processes, 1,
+                ip, args.gamma, eval_log_dir, args.add_timestep, device, True, vis=True)
+
+            vec_norm = get_vec_normalize(eval_envs)
+            if vec_norm is not None:
+                vec_norm.eval()
+                vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
+
+            eval_episode_rewards = []
+
+            obs = eval_envs.reset()
+            eval_recurrent_hidden_states = torch.zeros(args.num_processes,
+                            actor_critic.recurrent_hidden_state_size, device=device)
+            eval_masks = torch.zeros(args.num_processes, 1, device=device)
+
+            while len(eval_episode_rewards) < 1:
+                with torch.no_grad():
+                    _, action, _, eval_recurrent_hidden_states = actor_critic.act(
+                        obs, eval_recurrent_hidden_states, eval_masks, deterministic=True)
+
+                # Obser reward and next obs
+                obs, reward, done, infos = eval_envs.step(action)
+
+                eval_masks = torch.tensor([[0.0] if done_ else [1.0]
+                                           for done_ in done],
+                                           dtype=torch.float32,
+                                           device=device)
+
+                for info in infos:
+                    if 'episode' in info.keys():
+                        eval_episode_rewards.append(info['episode']['r'])
+
+            eval_envs.close()
+
+            print(" Evaluation using {} episodes: mean reward {:.5f}\n".
+                format(len(eval_episode_rewards),
+                       np.mean(eval_episode_rewards)))
 
         if args.vis and j % args.vis_interval == 0:
             try:
