@@ -56,6 +56,8 @@ class VrepEnv(Env):
         # Launch a V-Rep server
         # Read more here: http://www.coppeliarobotics.com/helpFiles/en/commandLine.htm
         port_num = base_port_num + rank
+        if not headless:  # DEBUG: Helps run enjoy while Train is running
+            port_num += 16
         remote_api_string = '-gREMOTEAPISERVERSERVICE_' + str(port_num) + '_FALSE_TRUE'
         args = [vrep_path, '-h' if headless else '', remote_api_string]
         atexit.register(self.close)
@@ -86,3 +88,6 @@ class VrepEnv(Env):
             os.killpg(pgrp, signal.SIGKILL)
         except ProcessLookupError:
             pass
+
+    def render(self, mode='human'):
+        pass

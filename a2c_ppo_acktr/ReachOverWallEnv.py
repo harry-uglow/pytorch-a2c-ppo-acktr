@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from gym import spaces
 import vrep
-from a2c_ppo_acktr.residual.ROW_utils import normalise_coords, normalise_angles
+from a2c_ppo_acktr.residual.ROW_utils import normalise_coords, normalise_angles, xl, xu, yu, yl
 
 from a2c_ppo_acktr.vrep_utils import check_for_errors, VrepEnv
 
@@ -16,7 +16,7 @@ scene_path = dir_path + '/reach_over_wall.ttt'
 
 class ReachOverWallEnv(VrepEnv):
 
-    observation_space = spaces.Box(np.array([0] * 12), np.array([1] * 12), dtype=np.float32)
+    observation_space = spaces.Box(np.array([0] * 11), np.array([1] * 11), dtype=np.float32)
     action_space = spaces.Box(np.array([-1] * 7), np.array([1] * 7), dtype=np.float32)
     target_velocities = np.array([0., 0., 0., 0., 0., 0., 0.])
     timestep = 0
@@ -55,7 +55,7 @@ class ReachOverWallEnv(VrepEnv):
         check_for_errors(return_code)
         self.end_pose = self.get_end_pose()
         _, self.target_handle = vrep.simxGetObjectHandle(self.cid,
-                "Waypoint", vrep.simx_opmode_blocking)
+                "Cube", vrep.simx_opmode_blocking)
         _, self.wall_handle = vrep.simxGetObjectHandle(self.cid,
                 "Wall", vrep.simx_opmode_blocking)
         self.init_wall_pos = vrep.simxGetObjectPosition(self.cid, self.wall_handle,
@@ -72,10 +72,10 @@ class ReachOverWallEnv(VrepEnv):
     def reset(self):
         self.call_lua_function('set_joint_angles', ints=self.init_config_tree,
                                floats=self.init_joint_angles)
-        vrep.simxSetObjectPosition(self.cid, self.wall_handle, -1,
-                                   self.init_wall_pos, vrep.simx_opmode_blocking)
-        vrep.simxSetObjectOrientation(self.cid, self.wall_handle, -1,
-                                      self.init_wall_rot, vrep.simx_opmode_blocking)
+        vrep.simxSetObjectPosition(self.cid, self.wall_handle, -1, self.init_wall_pos,
+                                   vrep.simx_opmode_blocking)
+        vrep.simxSetObjectOrientation(self.cid, self.wall_handle, -1, self.init_wall_rot,
+                                      vrep.simx_opmode_blocking)
 
         self.target_velocities = np.array([0., 0., 0., 0., 0., 0., 0.])
         self.joint_angles = self.init_joint_angles
@@ -100,7 +100,7 @@ class ReachOverWallEnv(VrepEnv):
 
         reward_ctrl = - np.square(self.target_velocities).mean()
         reward_obstacle = - np.abs(self.wall_orientation).sum()
-        reward = 0.01 * (reward_dist + reward_ctrl + reward_obstacle)
+        reward = 0.01 * (reward_dist + reward_ctrl + 0.5 * reward_obstacle)
 
         return ob, reward, done, dict(reward_dist=reward_dist,
                                       reward_ctrl=reward_ctrl,
@@ -112,8 +112,7 @@ class ReachOverWallEnv(VrepEnv):
         norm_joints = normalise_angles(self.joint_angles)
         self.end_pose = self.get_end_pose()
 
-        return np.concatenate((norm_joints, self.target_norm,
-                               [self.wall_distance, 0.3])) # TODO: Get height in init
+        return np.concatenate((norm_joints, self.target_norm, [self.wall_distance]))
 
     def update_sim(self):
         for handle, velocity in zip(self.joint_handles, self.target_velocities):
@@ -128,5 +127,13 @@ class ReachOverWallEnv(VrepEnv):
                                           vrep.simx_opmode_blocking)[1]
         return np.array(pose)
 
-    def render(self, mode='human'):
-        pass
+
+class ROWRandomTargetEnv(ReachOverWallEnv):
+
+    def reset(self):
+        self.target_pos[0] = self.np_random.uniform(xl, xu)
+        self.target_pos[1] = self.np_random.uniform(yl, yu)
+        self.target_norm = normalise_coords(self.target_pos)
+        vrep.simxSetObjectPosition(self.cid, self.target_handle, -1, self.target_pos,
+                                   vrep.simx_opmode_blocking)
+        return super(ROWRandomTargetEnv, self).reset()

@@ -4,10 +4,15 @@ import numpy as np
 
 from a2c_ppo_acktr.residual.initial_policy_model import InitialPolicy, train_nn
 
+xl = 0.15
+xu = 0.45
+yl = -0.35
+yu = -0.65
 
-# Normalise target so that x and y are in range [0, 1].
-def normalise_coords(coords, lower=np.array([0.2, -0.4, 0.2]),
-                     upper=np.array([0.9, 0.4, 1])):  # DEBUG: u/l bounds currently set for waypoint
+
+# Normalise coordinates so all are in range [0, 1].
+# DEBUG: u/l bounds currently set for waypoint
+def normalise_coords(coords, lower=np.array([xl, yl, 0.025]), upper=np.array([xu, yu, 1])):
     return (coords - lower) / (upper - lower)
 
 
