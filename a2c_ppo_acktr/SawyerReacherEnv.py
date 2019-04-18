@@ -3,62 +3,16 @@ import os
 import numpy as np
 from gym import spaces
 import vrep
-from a2c_ppo_acktr.residual.initial_policy_model import InitialPolicy, train_nn
 
 from a2c_ppo_acktr.vrep_utils import check_for_errors, VrepEnv
 
-np.set_printoptions(precision=2, linewidth=200)
+np.set_printoptions(precision=2, linewidth=200)  # DEBUG
 
 dir_path = os.getcwd()
 scene_path = dir_path + '/reacher.ttt'
 
-class Arm3DEnv(VrepEnv):
 
-    # def generate_training_path(joint_angles, target):
-    #
-    #     train_path = []
-    #     curr_joint_angles = np.copy(joint_angles)
-    #     curr_target = compute_end_pose(curr_joint_angles)
-    #
-    #     for i in range(0, ep_len):
-    #         if np.array_equal(target, curr_target):
-    #             train_path += [np.concatenate((curr_joint_angles, target,
-    #                                            [0, 0, 0]))]
-    #             continue
-    #         vec_to_target = target - curr_target
-    #         dist_to_target = np.linalg.norm(vec_to_target)
-    #
-    #         if dist_to_target < dps:
-    #             curr_target = target
-    #         else:
-    #             target_direction = vec_to_target / dist_to_target
-    #             curr_target = curr_target + (target_direction * dps)
-    #
-    #         d_theta = compute_d_theta(curr_joint_angles, curr_target)
-    #
-    #         train_path += [np.concatenate((curr_joint_angles, target, d_theta))]
-    #
-    #         curr_joint_angles[0] += d_theta[0]
-    #         curr_joint_angles[1] += d_theta[1]
-    #         curr_joint_angles[2] += d_theta[2]
-    #
-    #     return np.array(train_path)
-
-    def get_demo_path(self):
-        num_path_points = 17
-        _, path, _, _ = self.call_lua_function('solve_ik')
-        path = np.reshape(path, (num_path_points, len(self.joint_handles)))
-        distances = np.array([path[i + 1] - path[i]
-                              for i in range(0, len(path) - 1)])
-        velocities = distances * 20 # Distances should be covered in 0.05s
-        return path[:-1], velocities
-
-    def train_initial_policy(self):
-        path_poses, train_y = self.get_demo_path()
-        train_x = self.normalise_joints(path_poses)
-        num_joints = len(self.joint_handles)
-        net = train_nn(InitialPolicy(num_joints, num_joints), train_x, train_y)
-        return net
+class SawyerReacherEnv(VrepEnv):
 
     observation_space = spaces.Box(np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                                    np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
@@ -100,8 +54,6 @@ class Arm3DEnv(VrepEnv):
         check_for_errors(return_code)
         _, self.target_handle = vrep.simxGetObjectHandle(self.cid,
                 "Cube", vrep.simx_opmode_blocking)
-
-        # self.train_initial_policy() # TODO
 
         # Start the simulation (the "Play" button in V-Rep should now be in a "Pressed" state)
         return_code = vrep.simxStartSimulation(self.cid, vrep.simx_opmode_blocking)
@@ -170,8 +122,3 @@ class Arm3DEnv(VrepEnv):
 
     def render(self, mode='human'):
         pass
-
-    ##### RESIDUAL RL #####
-    # ip_action = initial_policy.act(obs)
-    # complete_action =
-    #######################

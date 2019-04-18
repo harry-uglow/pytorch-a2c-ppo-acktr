@@ -56,10 +56,11 @@ class VrepEnv(Env):
         # Launch a V-Rep server
         # Read more here: http://www.coppeliarobotics.com/helpFiles/en/commandLine.htm
         port_num = base_port_num + rank
-        remote_api_string = '-gREMOTEAPISERVERSERVICE_' + str(
-            port_num) + '_FALSE_TRUE'
+        if not headless:  # DEBUG: Helps run enjoy while Train is running
+            port_num += 16
+        remote_api_string = '-gREMOTEAPISERVERSERVICE_' + str(port_num) + '_FALSE_TRUE'
         args = [vrep_path, '-h' if headless else '', remote_api_string]
-        atexit.register(self.close_vrep)
+        atexit.register(self.close)
         self.process = Popen(args, preexec_fn=os.setsid)
         time.sleep(6)
 
@@ -77,10 +78,16 @@ class VrepEnv(Env):
         check_for_errors(return_code)
         return out_ints, out_floats, out_strings, out_buffer
 
-    def close_vrep(self):
+    def close(self):
         # Shutdown
         print("Closing VREP")
         vrep.simxStopSimulation(self.cid, vrep.simx_opmode_blocking)
         vrep.simxFinish(self.cid)
-        pgrp = os.getpgid(self.process.pid)
-        os.killpg(pgrp, signal.SIGKILL)
+        try:
+            pgrp = os.getpgid(self.process.pid)
+            os.killpg(pgrp, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+    def render(self, mode='human'):
+        pass

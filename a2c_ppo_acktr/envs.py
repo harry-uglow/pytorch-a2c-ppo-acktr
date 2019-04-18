@@ -12,8 +12,9 @@ from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 
+from a2c_ppo_acktr.ReachOverWallEnv import ReachOverWallEnv, ROWRandomTargetEnv
 from a2c_ppo_acktr.env_2d import Arm2DEnv
-from a2c_ppo_acktr.env_3d import Arm3DEnv
+from a2c_ppo_acktr.SawyerReacherEnv import SawyerReacherEnv
 
 try:
     import dm_control2gym
@@ -31,9 +32,9 @@ except ImportError:
     pass
 
 
-def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets, vis):
+def make_env(env_id, seed, rank, initial_policy, log_dir, add_timestep, allow_early_resets, vis):
     def _thunk():
-        env = Arm3DEnv(seed, rank, headless=not vis)
+        env = ROWRandomTargetEnv(seed, rank, initial_policy=initial_policy, headless=not vis)
         if log_dir is not None:
             env = bench.Monitor(env, os.path.join(log_dir, str(rank)),
                                     allow_early_resets=allow_early_resets)
@@ -83,9 +84,11 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets, vis)
     #
     # return _thunk
 
-def make_vec_envs(env_name, seed, num_processes, gamma, log_dir, add_timestep,
+
+def make_vec_envs(env_name, seed, num_processes, initial_policy, gamma, log_dir, add_timestep,
                   device, allow_early_resets, num_frame_stack=None, vis=False):
-    envs = [make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets, vis)
+    envs = [make_env(env_name, seed, i, initial_policy, log_dir,
+                     add_timestep, allow_early_resets, vis)
             for i in range(num_processes)]
 
     if len(envs) > 1:
